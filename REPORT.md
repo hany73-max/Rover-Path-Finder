@@ -305,26 +305,26 @@ No project is perfect, and it is important to be upfront about where this approa
 
 ### Setup
 
-```bash
-# Clone the repository and install dependencies using uv
+```powershell
+# Clone the repository and install dependencies
 uv sync
 ```
 
 ### Run the full lunar demo (reproduces all figures and numbers from this report)
 
-```bash
+```powershell
 uv run python main.py
 # Output saved to: outputs/
-#   fig1_terrain.png          — elevation, slope, and hazard map
-#   fig2_solution_and_path.png — potential fields (A vs B) and the rover path
+#   fig1_terrain.png               — elevation, slope, and hazard map
+#   fig2_solution_and_path.png     — potential fields (A vs B) and the rover path
 #   fig3_validation_and_solvers.png — convergence order and solver comparison
-#   fig4_trap_comparison.png  — APF stuck vs Laplace success
-#   results.txt               — all printed numbers
+#   fig4_trap_comparison.png       — APF stuck vs Laplace success
+#   results.txt                    — all printed numbers
 ```
 
 ### Run the height-map planner on the built-in synthetic Mars terrain
 
-```bash
+```powershell
 uv run python plan_on_heightmap.py
 # Output saved to: outputs/
 #   map_contours.png   — topographic contour map
@@ -333,16 +333,37 @@ uv run python plan_on_heightmap.py
 #   route.csv          — waypoint table (x, y, elevation, distance)
 ```
 
-### Run on a real Mars DEM (GeoTIFF from HiRISE or MOLA)
+### Run on a real Mars DEM (HiRISE .IMG — pixel size read automatically)
 
-```bash
-uv run python plan_on_heightmap.py mars.tif \
-    --mpp 463 \
-    --start 120 80 \
-    --goal 700 520 \
-    --max-slope 20 \
-    --rover-radius 100 \
-    --palette mars
+First, generate a ticked map so you can read off start/goal pixel coordinates:
+
+```powershell
+# Look pass — produces map_contours.png with x/y pixel labels on the axes
+uv run python plan_on_heightmap.py data/kasei.IMG `
+    --ticks --palette mars --out outputs/look
+```
+
+Then plan the route using the coordinates you read from the map:
+
+```powershell
+# Kasei Valles constriction — needs 25° limit (channel walls ~25°)
+uv run python plan_on_heightmap.py data/kasei.IMG `
+    --start 250 500 `
+    --goal 2400 5800 `
+    --max-slope 25 `
+    --rover-radius 20 `
+    --palette mars `
+    --out outputs/kasei
+```
+
+**Actual output from this run:**
+```
+map: data/kasei.IMG | 3164x6422 px of 2.02 m -> planning grid 63x128 cells of 101 m
+     relief -2126..-1059 m | 24% no-data
+hazard cells: 1567 real, 1567 with margin, of 8064
+route found: 107 cells | length 14.42 km (shortest safe 12.50 km, +15%)
+             max slope on route 24.9° (limit 25.0) | climb 651 m, descent 935 m
+             solver 10666 iters, 2.7s
 ```
 
 See Section 8 for details on obtaining real Mars elevation data.
@@ -351,7 +372,7 @@ See Section 8 for details on obtaining real Mars elevation data.
 
 ## 8. Using Real Mars Height Maps
 
-Yes — the planner fully supports real planetary Digital Elevation Models (DEMs). The `plan_on_heightmap.py` script accepts `.tif`, `.png`, `.npy`, and `.csv` files.
+The planner fully supports real planetary Digital Elevation Models (DEMs). The `plan_on_heightmap.py` script accepts **PDS3 `.IMG` files** (HiRISE, MOLA, LROC) directly — the pixel size is read automatically from the label. It also accepts `.tif`, `.png`, `.npy`, and `.csv`.
 
 ### Where to get Mars DEMs
 
@@ -359,35 +380,41 @@ Yes — the planner fully supports real planetary Digital Elevation Models (DEMs
 |--------|-----------|--------|------|
 | **MOLA** (Mars Orbiter Laser Altimeter) | ~463 m/px globally | GeoTIFF | [NASA PDS Geosciences Node](https://pds-geosciences.wustl.edu/missions/mgs/megdr.html) |
 | **HRSC** (Mars Express High Resolution Stereo Camera) | ~12–50 m/px | GeoTIFF | [ESA Planetary Science Archive](https://www.cosmos.esa.int/web/psa) |
-| **HiRISE DEMs** (Mars Reconnaissance Orbiter) | ~1 m/px (targeted areas) | GeoTIFF | [HiRISE DTM portal](https://www.uahirise.org/dtm/) |
+| **HiRISE DEMs** (Mars Reconnaissance Orbiter) | ~1–2 m/px (targeted areas) | PDS3 `.IMG` | [HiRISE DTM portal](https://www.uahirise.org/dtm/) |
 | **CTX DEMs** | ~6 m/px (many areas) | GeoTIFF | [OpenTopography Mars](https://portal.opentopography.org/) |
 
-### Practical example (MOLA global map)
+### Practical example — Kasei Valles (HiRISE DTM, 2 m/px)
 
-```bash
-# Download MOLA 128 px/degree map (~230 MB)
-# From: https://pds-geosciences.wustl.edu/mgs/mgs-m-mola-5-megdr-l3-v1/mgsl_300x/meg128/
-# File: megt90n000cb.img (binary) or use the GeoTIFF version
+```powershell
+# Download the DEM into data/ (~78 MB)
+curl.exe -L -o data/kasei.IMG `
+    "https://www.uahirise.org/PDS/DTM/ESP/ORB_032100_032199/ESP_032193_1990_ESP_031837_1990/DTEED_032193_1990_031837_1990_A01.IMG"
 
-uv run python plan_on_heightmap.py mola_tharsis.tif \
-    --mpp 463 \
-    --crop 800 400 1400 900 \
-    --max-slope 15 \
-    --rover-radius 200 \
-    --max-size 300 \
-    --palette mars \
-    --out outputs/tharsis_route
+# Step 1: look pass — generates a pixel-labelled contour map so you can pick coordinates
+uv run python plan_on_heightmap.py data/kasei.IMG `
+    --ticks --palette mars --out outputs/look
+
+# Step 2: plan the route (25° needed — channel walls exceed 20°)
+uv run python plan_on_heightmap.py data/kasei.IMG `
+    --start 250 500 `
+    --goal 2400 5800 `
+    --max-slope 25 `
+    --rover-radius 20 `
+    --palette mars `
+    --out outputs/kasei
 ```
 
 ### Key parameters for real DEMs
 
 | Parameter | What it does | Typical value |
 |-----------|-------------|---------------|
-| `--mpp` | Metres per pixel of the *original* image | 463 (MOLA), 6 (CTX), 1 (HiRISE) |
-| `--max-slope` | Maximum drivable slope in degrees | 15–20° for wheeled rovers |
-| `--rover-radius` | Safety clearance around hazards in metres | 100–500 m for real missions |
+| `--mpp` | Metres per pixel of the *original* image (auto-read from `.IMG`) | 463 (MOLA), 6 (CTX), 1–2 (HiRISE) |
+| `--ticks` | Label contour map axes in original pixels to read off start/goal | Use on first run |
+| `--max-slope` | Maximum drivable slope in degrees | 15–25° for wheeled rovers |
+| `--rover-radius` | Safety clearance around hazards in metres | 5–500 m depending on scale |
 | `--max-size` | Downsample to this many cells on longest side | 150–400 (trades accuracy vs speed) |
-| `--crop X0 Y0 X1 Y1` | Use only a sub-region of the original map | Needed for large DEMs |
+| `--crop X0 Y0 X1 Y1` | Use only a sub-region of the original map | Needed for very large DEMs |
+| `--out DIR` | Output directory for figures and route.csv | e.g. `outputs/kasei` |
 | `--pick` | Click start/goal interactively on the map | Useful for exploration |
 
 ### Why the same algorithm works at any scale

@@ -13,6 +13,7 @@ dilate              : morphological dilation of a boolean hazard mask
 """
 
 import os
+import re
 from typing import Optional
 
 import numpy as np
@@ -123,24 +124,133 @@ def synthetic_mars(rows: int = 420, cols: int = 300, seed: int = 7, relief: floa
 # Loading and pre-processing
 # ---------------------------------------------------------------------------
 
-def load_heightmap(path: str, height_range: Optional[tuple[float, float]] = None) -> np.ndarray:
+def read_pds3(path: str) -> tuple[np.ndarray, dict]:
+    """Minimal reader for PDS3 rasters with an attached label (e.g. HiRISE DTM .IMG).
+
+    Returns a memory-mapped array (nothing is read until you slice it) and a
+    metadata dict with keys ``mpp`` (metres/pixel), ``missing`` (no-data value),
+    and ``label_type`` (SAMPLE_TYPE string).
+
+    Raises
+    ------
+    ValueError
+        If no attached PDS3 label is found or the pointer is detached.
+    """
+    with open(path, "rb") as fh:
+        head = fh.read(400_000)
+    end = re.search(rb"\r?\nEND\s*(\r?\n|$)", head)
+    if not end:
+        raise ValueError(
+            "no attached PDS3 label found; "
+            "convert with: gdal_translate file.IMG file.tif"
+        )
+    label = head[: end.end()].decode("latin-1")
+
+    def get(key: str) -> Optional[str]:
+        m = re.search(
+            r"^\s*" + re.escape(key) + r"\s*=\s*(.+?)\s*$", label, re.M
+        )
+        return m.group(1).strip() if m else None
+
+    def num(v: str) -> float:
+        """Parse a PDS3 numeric, including radix literals like 16#FF7FFFFB#."""
+        tok = re.split(r"[\s<(,]", v.strip().strip('"'))[0]
+        radix = re.match(r"(\d+)#([0-9A-Fa-f]+)#", tok)
+        if radix:
+            return float(int(radix.group(2), int(radix.group(1))))
+        return float(tok)
+
+    ptr = get("^IMAGE")
+    if ptr is None or '"' in ptr or ptr.startswith("("):
+        raise ValueError(
+            "label is detached; convert with: gdal_translate file.IMG file.tif"
+        )
+    off = int(num(ptr)) - 1
+    if "<BYTES>" not in ptr:
+        off *= int(num(get("RECORD_BYTES")))
+    lines = int(num(get("LINES")))
+    samples = int(num(get("LINE_SAMPLES")))
+    bits = int(num(get("SAMPLE_BITS")))
+    st = (get("SAMPLE_TYPE") or "").strip('"').upper()
+    little = st.startswith(("PC", "LSB"))
+    kind = "f" if "REAL" in st else ("u" if "UNSIGNED" in st else "i")
+    dtype = np.dtype(("<" if little else ">") + kind + str(bits // 8))
+    arr = np.memmap(path, dtype=dtype, mode="r", offset=off, shape=(lines, samples))
+    meta = {
+        "mpp": num(get("MAP_SCALE")) if get("MAP_SCALE") else None,
+        "missing": num(get("MISSING_CONSTANT")) if get("MISSING_CONSTANT") else None,
+        "label_type": st,
+    }
+    return arr, meta
+
+
+def block_mean(
+    h: np.ndarray,
+    f: int,
+    missing: Optional[float] = None,
+) -> tuple[np.ndarray, np.ndarray]:
+    """Average f×f blocks, ignoring no-data pixels.
+
+    Works in row bands to keep memory low for large memory-mapped arrays.
+
+    Parameters
+    ----------
+    h       : 2-D array (may be a memory-map)
+    f       : block side length in pixels
+    missing : sentinel value to treat as no-data (in addition to non-finite)
+
+    Returns
+    -------
+    out  : (rows//f) × (cols//f) float array of block means
+    frac : same shape — fraction of valid pixels in each block (0..1)
+    """
+    r = (h.shape[0] // f) * f
+    c = (h.shape[1] // f) * f
+    out = np.empty((r // f, c // f))
+    frac = np.empty_like(out)
+    band = f * max(1, 1500 // f)
+    for i in range(0, r, band):
+        blk = np.asarray(h[i : min(i + band, r), :c], dtype=np.float64)
+        bad = ~np.isfinite(blk) | (np.abs(blk) > 1e30)
+        if missing is not None:
+            bad |= blk == missing
+        good = (~bad).astype(float)
+        blk = np.where(bad, 0.0, blk)
+        n = blk.shape[0] // f
+        s = blk.reshape(n, f, c // f, f).sum(axis=(1, 3))
+        g = good.reshape(n, f, c // f, f).sum(axis=(1, 3))
+        out[i // f : i // f + n] = np.where(g > 0, s / np.maximum(g, 1), np.nan)
+        frac[i // f : i // f + n] = g / (f * f)
+    return out, frac
+
+
+def load_heightmap(
+    path: str,
+    height_range: Optional[tuple[float, float]] = None,
+) -> tuple[np.ndarray, dict]:
     """Load a height map from disk.
 
-    Supports ``.npy``, ``.txt``, ``.csv``, and any image format that PIL
-    can open (16-bit PNG, float/int TIFF, …).
+    Supports ``.img`` / ``.imq`` (PDS3 attached label), ``.npy``, ``.txt``,
+    ``.csv``, and any image format that PIL can open (16-bit PNG, float TIFF…).
 
     Parameters
     ----------
     path         : path to the file
     height_range : optional ``(lo, hi)`` metres to rescale pixel values
+                   (only used for plain image formats)
 
     Returns
     -------
-    h : 2-D float array of heights
+    h    : 2-D float array of heights
+    meta : dict with ``mpp`` (float or None) and ``missing`` (float or None)
     """
     ext = os.path.splitext(path)[1].lower()
-    if ext == ".npy":
-        h = np.load(path).astype(float)
+    meta: dict = {"mpp": None, "missing": None}
+
+    if ext in (".img", ".imq"):
+        h, meta = read_pds3(path)
+    elif ext == ".npy":
+        h = np.load(path, mmap_mode="r")
     elif ext in (".txt", ".csv"):
         h = np.loadtxt(path, delimiter="," if ext == ".csv" else None)
     else:
@@ -154,17 +264,12 @@ def load_heightmap(path: str, height_range: Optional[tuple[float, float]] = None
     if h.ndim == 3:
         h = h[..., 0]
 
-    # replace common "no data" sentinel values
-    h = np.where(np.abs(h) > 1e30, np.nan, h)
-    if np.isnan(h).any():
-        print(f"warning: {int(np.isnan(h).sum())} no-data pixels replaced by the mean height")
-        h = np.where(np.isnan(h), np.nanmean(h), h)
-
     if height_range is not None:
+        h = np.asarray(h, dtype=float)
         lo, hi = height_range
         h = lo + (h - h.min()) / max(h.max() - h.min(), 1e-12) * (hi - lo)
 
-    return h
+    return h, meta
 
 
 def smooth(h: np.ndarray, sigma: float) -> np.ndarray:

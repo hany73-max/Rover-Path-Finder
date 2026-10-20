@@ -14,6 +14,7 @@ fig_route           : topographic contour map with the planned route overlaid
 fig_profile         : elevation and slope profiles along the route
 fig_art             : clean contour map without the route (for visual reference)
 draw_contours       : shared helper — draw contour lines on an Axes
+add_ticks           : label axes in original-image pixels (for picking start/goal)
 pick_points         : interactive start/goal selection (desktop only)
 """
 
@@ -239,6 +240,35 @@ def draw_contours(
     for sp in ax.spines.values():
         sp.set_visible(False)
 
+def add_ticks(
+    ax,
+    shape: tuple[int, int],
+    ticks: tuple[int, int, int],
+) -> None:
+    """Label axes in original-image pixel coordinates.
+
+    Useful with ``--ticks`` mode: after generating the contour map you can
+    read the tick values to choose ``--start`` / ``--goal`` pixel coordinates.
+
+    Parameters
+    ----------
+    ax     : Matplotlib Axes
+    shape  : ``(rows, cols)`` of the planning grid
+    ticks  : ``(x0, y0, f)`` — crop origin in original pixels and downsampling factor
+    """
+    x0, y0, f = ticks
+    c, r = shape[1], shape[0]
+    nx = np.linspace(0, c - 1, 6)
+    ny = np.linspace(0, r - 1, 8)
+    ax.set_xticks(nx)
+    ax.set_xticklabels([f"{int(x0 + x * f)}" for x in nx], fontsize=7)
+    ax.set_yticks(ny)
+    ax.set_yticklabels([f"{int(y0 + y * f)}" for y in ny], fontsize=7)
+    ax.tick_params(length=3)
+    ax.grid(alpha=0.3, color="k", lw=0.4)
+    ax.set_xlabel("x (original pixels)", fontsize=8)
+    ax.set_ylabel("y (original pixels)", fontsize=8)
+
 
 def fig_art(
     hfull: np.ndarray,
@@ -247,6 +277,7 @@ def fig_art(
     levels: int,
     bg: str,
     path: str,
+    ticks: tuple[int, int, int] | None = None,
 ) -> None:
     """Save a clean contour map (no route overlay).
 
@@ -258,13 +289,19 @@ def fig_art(
     levels : number of contour levels
     bg     : background colour
     path   : output file path
+    ticks  : if given, label axes in original pixels — ``(x0, y0, f_total)``
     """
+    extra = 0.7 if ticks else 0
     f_, ax = plt.subplots(
-        figsize=(7, 7 * shape[0] / shape[1]),
+        figsize=(7, 7 * shape[0] / shape[1] + extra),
         facecolor=bg,
     )
     draw_contours(ax, hfull, f, shape, levels, bg)
-    f_.subplots_adjust(0, 0, 1, 1)
+    if ticks:
+        add_ticks(ax, shape, ticks)
+        f_.tight_layout()
+    else:
+        f_.subplots_adjust(0, 0, 1, 1)
     f_.savefig(path, dpi=160, facecolor=bg)
     plt.close(f_)
 
@@ -279,6 +316,7 @@ def fig_route(
     cell: float,
     path: str,
     show_hazard: bool = True,
+    ticks: tuple[int, int, int] | None = None,
 ) -> None:
     """Save a contour map with the planned route overlaid.
 
@@ -293,12 +331,15 @@ def fig_route(
     cell        : cell size in metres (used for title)
     path        : output file path
     show_hazard : whether to shade hazard cells
+    ticks       : if given, label axes in original pixels — ``(x0, y0, f_total)``
     """
     fg, ax = plt.subplots(
         figsize=(7.5, 7.5 * shape[0] / shape[1] + 0.8),
         facecolor=bg,
     )
     draw_contours(ax, hfull, f, shape, levels, bg)
+    if ticks:
+        add_ticks(ax, shape, ticks)
 
     if show_hazard:
         ax.contourf(info["hazard"].astype(float), levels=[0.5, 1.5], colors=["#000000"], alpha=0.30)

@@ -436,12 +436,14 @@ source = { editable = "." }
 dependencies = [
     { name = "matplotlib" },
     { name = "numpy" },
+    { name = "pillow" },
 ]
 
 [package.metadata]
 requires-dist = [
     { name = "matplotlib" },
     { name = "numpy" },
+    { name = "pillow" },
 ]
 
 [[package]]

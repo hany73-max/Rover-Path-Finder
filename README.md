@@ -33,17 +33,27 @@ Rover-Path-Finder/
 ├── rover_path_finder/          ← Python package (all the real math lives here)
 │   ├── __init__.py
 │   ├── solvers.py              ← Jacobi, Gauss-Seidel, SOR, Neumann-SOR
-│   ├── terrain.py              ← terrain generation, DEM loading, dilation, slope
+│   ├── terrain.py              ← terrain generation, DEM loading, PDS3 reader, dilation
 │   ├── planners.py             ← potential builders, steepest descent, Dijkstra
 │   └── visualization.py       ← all Matplotlib figures
 │
 ├── main.py                     ← CLI: runs the full lunar demo (reproduces REPORT.md)
-├── plan_on_heightmap.py        ← CLI: plan a route on any height map (real or synthetic)
+├── plan_on_heightmap.py        ← CLI: plan a route on any height map (.img/.tif/.png/…)
+├── run_all.ps1                 ← reproduces all real-DEM runs end-to-end
+│
+├── data/                       ← downloaded DEM files (git-ignored)
+│   ├── kasei.IMG               ← HiRISE DTM, Kasei Valles, 2 m/px (~78 MB)
+│   └── opportunity.IMG         ← HiRISE DTM, Opportunity site, 1 m/px (~9 MB)
+│
+├── outputs/                    ← generated figures & logs (git-ignored)
+│   ├── kasei/                  ← Kasei Valles route plan
+│   ├── opportunity/            ← Opportunity site route plan
+│   └── look/                   ← ticked look-pass maps (for picking coordinates)
 │
 ├── pyproject.toml              ← project metadata + dependencies (uv-managed)
 ├── uv.lock                     ← locked dependency versions
 ├── REPORT.md                   ← full project write-up (theory, derivation, results)
-└── outputs/                    ← generated figures & logs (git-ignored)
+└── small_mars_dtms.csv         ← catalogue of downloadable HiRISE DEMs
 ```
 
 ---
@@ -52,7 +62,7 @@ Rover-Path-Finder/
 
 Requires [uv](https://docs.astral.sh/uv/) (fast Python package manager).
 
-```bash
+```powershell
 # 1. Install dependencies into a managed virtual environment
 uv sync
 
@@ -77,7 +87,7 @@ uv run python plan_on_heightmap.py
 
 ## Using Real Mars DEMs
 
-**Yes — the planner works on real Mars elevation data.** The `plan_on_heightmap.py` script accepts `.tif`, `.png`, `.npy`, and `.csv` files from NASA/ESA archives.
+**Yes — the planner works on real Mars elevation data.** The `plan_on_heightmap.py` script reads **PDS3 `.IMG` files** (HiRISE, MOLA) directly with automatic pixel-size detection, and also accepts `.tif`, `.png`, `.npy`, `.csv`.
 
 ### Where to download Mars DEMs
 
@@ -85,34 +95,34 @@ uv run python plan_on_heightmap.py
 |--------|-----------|--------|
 | [MOLA (NASA PDS)](https://pds-geosciences.wustl.edu/missions/mgs/megdr.html) | ~463 m/px (global) | GeoTIFF |
 | [HRSC (ESA)](https://www.cosmos.esa.int/web/psa) | ~12–50 m/px | GeoTIFF |
-| [HiRISE DTMs](https://www.uahirise.org/dtm/) | ~1 m/px (targeted) | GeoTIFF |
+| [HiRISE DTMs](https://www.uahirise.org/dtm/) | ~1–2 m/px (targeted) | PDS3 `.IMG` |
 | [OpenTopography Mars](https://portal.opentopography.org/) | ~6 m/px (CTX) | GeoTIFF |
 
-### Example usage
+### Two-step workflow for `.IMG` files
 
-```bash
-# MOLA global map — plan across Tharsis plateau
-uv run python plan_on_heightmap.py mola_tharsis.tif \
-    --mpp 463 \
-    --crop 800 400 1400 900 \
-    --max-slope 15 \
-    --rover-radius 200 \
-    --max-size 300 \
-    --palette mars \
-    --out outputs/tharsis_route
+```powershell
+# Step 1: look pass — generates a pixel-labelled contour map
+#         so you can read off --start / --goal coordinates
+uv run python plan_on_heightmap.py data/kasei.IMG `
+    --ticks --palette mars --out outputs/look
 
-# HiRISE 1 m/px DEM — very high resolution local planning
-uv run python plan_on_heightmap.py hirise_dem.tif \
-    --mpp 1 \
-    --start 200 150 \
-    --goal 800 600 \
-    --max-slope 20 \
-    --rover-radius 5 \
-    --max-size 400
-
-# Interactive: click start and goal on the map
-uv run python plan_on_heightmap.py mars.tif --mpp 463 --pick
+# Step 2: plan the route with the coordinates you picked
+uv run python plan_on_heightmap.py data/kasei.IMG `
+    --start 250 500 `
+    --goal 2400 5800 `
+    --max-slope 25 `
+    --rover-radius 20 `
+    --palette mars `
+    --out outputs/kasei
 ```
+
+**Actual result on Kasei Valles (HiRISE DTM, 2 m/px, ~78 MB):**
+```
+map: 3164x6422 px of 2.02 m → 63x128 cells of 101 m | 24% no-data
+route found: 107 cells | 14.42 km | max slope 24.9° | climb 651 m | 2.7 s
+```
+
+> **Tip:** Run `.\ run_all.ps1` to reproduce all runs automatically, including downloading the DEMs.
 
 ### All CLI options
 
@@ -120,16 +130,18 @@ uv run python plan_on_heightmap.py mars.tif --mpp 463 --pick
 plan_on_heightmap.py [heightmap] [options]
 
 Arguments:
-  heightmap             Path to DEM file (.tif/.png/.npy/.csv). Omit for synthetic demo.
+  heightmap             Path to DEM file (.img/.tif/.png/.npy/.csv). Omit for synthetic demo.
 
 Options:
   --start X Y           Start pixel in the original image (x right, y down)
   --goal  X Y           Goal pixel in the original image
   --pick                Click start and goal interactively (needs a display)
-  --mpp   FLOAT         Metres per pixel of the original map (default: 50)
+  --ticks               Label contour map axes in original pixels (to pick start/goal)
+  --mpp   FLOAT         Metres per pixel (auto-read from .img labels; default: 50)
   --height-range LO HI  Map pixel values to this elevation range in metres
   --crop  X0 Y0 X1 Y1   Use only this sub-region of the original map
   --max-size  INT       Downsample so longest side ≤ N cells (default: 150)
+  --art-size  INT       Max cells for contour-art pass (default: 700)
   --max-slope FLOAT     Max drivable slope in degrees (default: 20)
   --rover-radius FLOAT  Safety margin around hazards in metres (default: 100)
   --smooth FLOAT        Gaussian blur radius in pixels before planning (default: 1)
