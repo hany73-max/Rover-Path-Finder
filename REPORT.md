@@ -392,7 +392,7 @@ uv run python plan_on_heightmap.py mola_tharsis.tif \
 
 ### Why the same algorithm works at any scale
 
-The Laplace equation itself has no intrinsic length scale — it is scale-invariant. Whether the grid cells represent 1 metre or 10 kilometres, the same finite-difference stencil applies, and the same maximum principle guarantees the rover cannot get stuck. The only thing that changes with scale is the number of SOR iterations needed ($O(N)$), which grows modestly with grid size.
+The Laplace equation itself has no intrinsic length scale — it is scale-invariant. Whether the grid cells represent 1 metre or 10 kilometres, the same finite-difference stencil applies, and the same maximum principle guarantees the rover cannot get stuck. The only thing that changes with scale is the number of SOR iterations needed ($ O(N) $), which grows modestly with grid size.
 
 ---
 
