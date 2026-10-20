@@ -13,15 +13,15 @@ Most path planners for robots use A* search or **Artificial Potential Fields (AP
 This project uses **Laplace's equation** instead:
 
 ```
-∂²φ/∂x² + ∂²φ/∂y² = 0
+∂²\phi/∂x² + ∂²\phi/∂y² = 0
 ```
 
 We solve this PDE over the obstacle-free region of the terrain, with:
-- **Start:** φ = 1 (Dirichlet source)
-- **Goal:** φ = 0 (Dirichlet sink)
-- **Obstacles:** ∂φ/∂n = 0 (Neumann no-flux wall)
+- **Start:** \phi = 1 (Dirichlet source)
+- **Goal:** \phi = 0 (Dirichlet sink)
+- **Obstacles:** ∂\phi/∂n = 0 (Neumann no-flux wall)
 
-The rover then follows steepest descent of φ. Because φ is **harmonic** (satisfies Laplace's equation), the **Maximum Principle** guarantees it has no interior local minima — the rover *cannot get stuck*, ever.
+The rover then follows steepest descent of \phi. Because \phi is **harmonic** (satisfies Laplace's equation), the **Maximum Principle** guarantees it has no interior local minima — the rover *cannot get stuck*, ever.
 
 ---
 

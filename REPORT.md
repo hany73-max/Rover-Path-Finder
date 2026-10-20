@@ -21,21 +21,21 @@ This section walks through the mathematics carefully, since the PDE and its nume
 
 ### 2.1 What is Laplace's Equation?
 
-Laplace's equation is a second-order linear PDE. For a scalar field φ defined over a 2D domain, it is written as:
+Laplace's equation is a second-order linear PDE. For a scalar field \phi defined over a 2D domain, it is written as:
 
 ```
-∇²φ = 0
+∇²\phi = 0
 ```
 
 Expanding the Laplacian operator ∇² in Cartesian coordinates gives us the explicit form:
 
 ```
-∂²φ/∂x² + ∂²φ/∂y² = 0
+∂²\phi/∂x² + ∂²\phi/∂y² = 0
 ```
 
 This equation says: at every point in the domain, the **sum of the second partial derivatives is zero**. A function satisfying this equation everywhere in a domain is called a **harmonic function**.
 
-To understand why this is useful, it helps to have an intuition for what the second derivative means. Recall that the first derivative ∂φ/∂x measures *how fast φ changes* in the x-direction. The second derivative ∂²φ/∂x² measures *how fast that rate of change is itself changing* — it measures **curvature**. When this is positive, the function is concave-up (bowl shape) in that direction. When negative, concave-down.
+To understand why this is useful, it helps to have an intuition for what the second derivative means. Recall that the first derivative ∂\phi/∂x measures *how fast \phi changes* in the x-direction. The second derivative ∂²\phi/∂x² measures *how fast that rate of change is itself changing* — it measures **curvature**. When this is positive, the function is concave-up (bowl shape) in that direction. When negative, concave-down.
 
 Laplace's equation says: **the concavity in x and the concavity in y must cancel out exactly**. This is a very strong constraint. It rules out the function being bowl-shaped in both x and y simultaneously — which means it cannot form a local minimum or maximum in the interior of the domain.
 
@@ -43,18 +43,18 @@ Laplace's equation says: **the concavity in x and the concavity in y must cancel
 
 Laplace's equation on its own is underdetermined — there are infinitely many harmonic functions. To get a unique solution, we must specify **boundary conditions** on the edges of the domain. There are two classical types:
 
-**Dirichlet boundary conditions** fix the *value* of φ on a boundary:
+**Dirichlet boundary conditions** fix the *value* of \phi on a boundary:
 
 ```
-φ = g(x, y)   on boundary Γ_D
+\phi = g(x, y)   on boundary Γ_D
 ```
 
-For example, "the potential at the target is φ = 0" is a Dirichlet condition.
+For example, "the potential at the target is \phi = 0" is a Dirichlet condition.
 
-**Neumann boundary conditions** fix the *normal derivative* of φ on a boundary:
+**Neumann boundary conditions** fix the *normal derivative* of \phi on a boundary:
 
 ```
-∂φ/∂n = h(x, y)   on boundary Γ_N
+∂\phi/∂n = h(x, y)   on boundary Γ_N
 ```
 
 where **n** is the outward-pointing unit normal vector. The special case h = 0 is called the **no-flux** or **insulating** condition — it says the field does not flow through that boundary at all. This is the one we use for hazard cells.
@@ -67,81 +67,81 @@ The reason Laplace's equation is perfect for path planning is the **Maximum Prin
 
 > *A non-constant harmonic function on a bounded connected domain cannot attain its maximum or minimum value at an interior point. The extrema must occur on the boundary.*
 
-We can give an informal proof. Suppose φ has a local minimum at some interior point P. By definition of a local minimum, the function curves *upward* in every direction away from P. That means both ∂²φ/∂x² ≥ 0 and ∂²φ/∂y² ≥ 0 at P (with at least one being strictly positive). But then ∂²φ/∂x² + ∂²φ/∂y² > 0, which contradicts Laplace's equation. Therefore, no interior minimum can exist.
+We can give an informal proof. Suppose \phi has a local minimum at some interior point P. By definition of a local minimum, the function curves *upward* in every direction away from P. That means both ∂²\phi/∂x² ≥ 0 and ∂²\phi/∂y² ≥ 0 at P (with at least one being strictly positive). But then ∂²\phi/∂x² + ∂²\phi/∂y² > 0, which contradicts Laplace's equation. Therefore, no interior minimum can exist.
 
-The implication for rover navigation is profound: if we set up φ so that the **target is the global minimum** (φ = 0 at the goal), then the only minimum in the whole domain is the goal itself. A rover that always moves toward lower values of φ will therefore always eventually reach the goal — it can never get stuck.
+The implication for rover navigation is profound: if we set up \phi so that the **target is the global minimum** (\phi = 0 at the goal), then the only minimum in the whole domain is the goal itself. A rover that always moves towards lower values of \phi will therefore always eventually reach the goal — it can never get stuck.
 
 ### 2.4 The Two Formulations We Tried
 
 #### Formulation A — Dirichlet on Hazards (Failure)
 
 Our first attempt placed Dirichlet conditions everywhere:
-- **Hazard cells:** φ = 1 (high potential, repulsive)
-- **Target:** φ = 0 (low potential, attractive)
-- **Free cells:** solve ∇²φ = 0
+- **Hazard cells:** \phi = 1 (high potential, repulsive)
+- **Target:** \phi = 0 (low potential, attractive)
+- **Free cells:** solve ∇²\phi = 0
 
-This seems reasonable, but it fails on real terrain. Consider a narrow corridor between two hazard walls. The potential at the walls is fixed at 1. By the maximum principle, φ inside the corridor must be between 0 and 1. But it turns out that φ decays from 1 *exponentially* as you move away from the wall — roughly like e^(−πd/w) where d is the distance from the wall and w is the corridor width. For narrow corridors, this decay is so sharp that by the time you are even one cell away from the wall, the gradient has already dropped below floating-point precision. The field looks completely flat, and the rover has no gradient to follow. This formulation simply does not work on complex terrain.
+This seems reasonable, but it fails on real terrain. Consider a narrow corridor between two hazard walls. The potential at the walls is fixed at 1. By the maximum principle, \phi inside the corridor must be between 0 and 1. But it turns out that \phi decays from 1 *exponentially* as you move away from the wall — roughly like e^(−πd/w) where d is the distance from the wall and w is the corridor width. For narrow corridors, this decay is so sharp that by the time you are even one cell away from the wall, the gradient has already dropped below floating-point precision. The field looks completely flat, and the rover has no gradient to follow. This formulation simply does not work on complex terrain.
 
 #### Formulation B — Neumann on Hazards (Success)
 
 The fix is to change the boundary condition on hazards from Dirichlet to **Neumann**:
-- **Hazard cells and map edges:** ∂φ/∂n = 0 (no flux through walls)
-- **Start cell:** φ = 1 (Dirichlet source)
-- **Target cell:** φ = 0 (Dirichlet sink)
+- **Hazard cells and map edges:** ∂\phi/∂n = 0 (no flux through walls)
+- **Start cell:** \phi = 1 (Dirichlet source)
+- **Target cell:** \phi = 0 (Dirichlet sink)
 
-Now the hazards are "insulating walls" rather than voltage sources. The field is not forced to a constant value near the walls — it is free to vary smoothly. Current (the gradient ∇φ) simply cannot flow *through* a hazard, but it flows freely *around* them. This produces a smooth, well-conditioned field throughout the whole free region, even in narrow passages.
+Now the hazards are "insulating walls" rather than voltage sources. The field is not forced to a constant value near the walls — it is free to vary smoothly. Current (the gradient ∇\phi) simply cannot flow *through* a hazard, but it flows freely *around* them. This produces a smooth, well-conditioned field throughout the whole free region, even in narrow passages.
 
 ### 2.5 Finite Difference Discretization
 
-To solve this PDE numerically, we discretize the domain into a uniform grid with spacing h in both x and y. Let φ_{i,j} denote the value of φ at grid point (i, j).
+To solve this PDE numerically, we discretize the domain into a uniform grid with spacing h in both x and y. Let \phi_{i,j} denote the value of \phi at grid point (i, j).
 
-We approximate the second derivatives using the standard **central difference formulas**. These come from Taylor expanding φ around the point (i, j):
+We approximate the second derivatives using the standard **central difference formulas**. These come from Taylor expanding \phi around the point (i, j):
 
 ```
-φ(x+h) = φ(x) + h·φ'(x) + (h²/2)·φ''(x) + (h³/6)·φ'''(x) + ...
-φ(x-h) = φ(x) - h·φ'(x) + (h²/2)·φ''(x) - (h³/6)·φ'''(x) + ...
+\phi(x+h) = \phi(x) + h·\phi'(x) + (h²/2)·\phi''(x) + (h³/6)·\phi'''(x) + ...
+\phi(x-h) = \phi(x) - h·\phi'(x) + (h²/2)·\phi''(x) - (h³/6)·\phi'''(x) + ...
 ```
 
 Adding these two expansions:
 
 ```
-φ(x+h) + φ(x-h) = 2φ(x) + h²·φ''(x) + O(h⁴)
+\phi(x+h) + \phi(x-h) = 2\phi(x) + h²·\phi''(x) + O(h⁴)
 ```
 
-Solving for φ''(x):
+Solving for \phi''(x):
 
 ```
-φ''(x) ≈ [φ(x+h) - 2φ(x) + φ(x-h)] / h²   + O(h²)
+\phi''(x) ≈ [\phi(x+h) - 2\phi(x) + \phi(x-h)] / h²   + O(h²)
 ```
 
 This approximation is **second-order accurate** — the error is proportional to h². Applying this to both x and y on our grid:
 
 ```
-∂²φ/∂x² ≈ (φ_{i,j+1} - 2φ_{i,j} + φ_{i,j-1}) / h²
-∂²φ/∂y² ≈ (φ_{i+1,j} - 2φ_{i,j} + φ_{i-1,j}) / h²
+∂²\phi/∂x² ≈ (\phi_{i,j+1} - 2\phi_{i,j} + \phi_{i,j-1}) / h²
+∂²\phi/∂y² ≈ (\phi_{i+1,j} - 2\phi_{i,j} + \phi_{i-1,j}) / h²
 ```
 
 Setting their sum to zero (Laplace's equation) and multiplying through by h²:
 
 ```
-(φ_{i,j+1} - 2φ_{i,j} + φ_{i,j-1}) + (φ_{i+1,j} - 2φ_{i,j} + φ_{i-1,j}) = 0
+(\phi_{i,j+1} - 2\phi_{i,j} + \phi_{i,j-1}) + (\phi_{i+1,j} - 2\phi_{i,j} + \phi_{i-1,j}) = 0
 ```
 
 Rearranging:
 
 ```
-4φ_{i,j} = φ_{i+1,j} + φ_{i-1,j} + φ_{i,j+1} + φ_{i,j-1}
+4\phi_{i,j} = \phi_{i+1,j} + \phi_{i-1,j} + \phi_{i,j+1} + \phi_{i,j-1}
 ```
 
 Or equivalently:
 
 ```
-φ_{i,j} = ¼ (φ_{i+1,j} + φ_{i-1,j} + φ_{i,j+1} + φ_{i,j-1})
+\phi_{i,j} = ¼ (\phi_{i+1,j} + \phi_{i-1,j} + \phi_{i,j+1} + \phi_{i,j-1})
 ```
 
 This is the **5-point stencil**: the value at each grid point equals the **average of its four axis-aligned neighbours**. This has a beautiful interpretation — a harmonic function satisfies the **mean value property**: its value at any point equals the average over any circle (or, on a grid, over its neighbours) centered at that point.
 
-For Neumann conditions (no-flux walls), when a neighbour cell is a hazard, we simply **drop that neighbour from the average** and divide by however many free neighbours remain. This is the correct finite-difference implementation of ∂φ/∂n = 0.
+For Neumann conditions (no-flux walls), when a neighbour cell is a hazard, we simply **drop that neighbour from the average** and divide by however many free neighbours remain. This is the correct finite-difference implementation of ∂\phi/∂n = 0.
 
 ### 2.6 Iterative Solvers
 
@@ -152,7 +152,7 @@ The discretized system gives us one equation per free grid cell, and each equati
 The simplest approach. At each sweep, update every free cell simultaneously using values from the *previous* sweep:
 
 ```
-φ_{i,j}^(k+1) = ¼ (φ_{i+1,j}^(k) + φ_{i-1,j}^(k) + φ_{i,j+1}^(k) + φ_{i,j-1}^(k))
+\phi_{i,j}^{(k+1)} = ¼ (\phi_{i+1,j}^{(k)} + \phi_{i-1,j}^{(k)} + \phi_{i,j+1}^{(k)} + \phi_{i,j-1}^{(k)})
 ```
 
 Jacobi is simple to implement but converges slowly — roughly O(N²) iterations for an N×N grid.
@@ -162,7 +162,7 @@ Jacobi is simple to implement but converges slowly — roughly O(N²) iterations
 A simple improvement: use the most recently computed values as soon as they are available. When updating cell (i,j), use the already-updated values of (i-1,j) and (i,j-1):
 
 ```
-φ_{i,j}^(k+1) = ¼ (φ_{i+1,j}^(k) + φ_{i-1,j}^(k+1) + φ_{i,j+1}^(k) + φ_{i,j-1}^(k+1))
+\phi_{i,j}^{(k+1)} = ¼ (\phi_{i+1,j}^{(k)} + \phi_{i-1,j}^{(k+1)} + \phi_{i,j+1}^{(k)} + \phi_{i,j-1}^{(k+1)})
 ```
 
 Gauss-Seidel converges about twice as fast as Jacobi for Laplace's equation, since it incorporates new information faster within each sweep.
@@ -172,10 +172,10 @@ Gauss-Seidel converges about twice as fast as Jacobi for Laplace's equation, sin
 SOR takes Gauss-Seidel one step further by **over-shooting** in the direction of the correction:
 
 ```
-φ_{i,j}^(k+1) = (1 - ω)·φ_{i,j}^(k) + ω·(Gauss-Seidel update)
+\phi_{i,j}^{(k+1)} = (1 - ω)·\phi_{i,j}^{(k)} + ω·(Gauss-Seidel update)
 ```
 
-where ω ∈ (1, 2) is the **relaxation factor**. The intuition is: if we know we need to move φ in a certain direction, why not move it a little further to make up for future corrections? The optimal value is:
+where ω ∈ (1, 2) is the **relaxation factor**. The intuition is: if we know we need to move \phi in a certain direction, why not move it a little further to make up for future corrections? The optimal value is:
 
 ```
 ω_opt = 2 / (1 + sin(π/N))
@@ -223,13 +223,13 @@ The Neumann condition is implemented as follows: for each free cell, we precompu
 Before trusting the solver on the terrain problem, we verified its accuracy against a known analytical solution. We used the unit square with boundary conditions:
 
 ```
-φ = sin(πx) on the top edge,   φ = 0 on the other three edges.
+\phi = sin(πx) on the top edge,   \phi = 0 on the other three edges.
 ```
 
 The exact solution to Laplace's equation for this problem is:
 
 ```
-φ(x, y) = sin(πx) · sinh(πy) / sinh(π)
+\phi(x, y) = sin(πx) · sinh(πy) / sinh(π)
 ```
 
 We solved the same problem numerically at four grid resolutions and measured the maximum error:
@@ -258,7 +258,7 @@ Jacobi and Gauss-Seidel both grow roughly like N² (doubling N roughly quadruple
 
 ### 5.3 Rover Path Planning Results
 
-**Formulation A (Dirichlet hazards):** As predicted in Section 2.4, this fails. After convergence, φ over all free cells sits in the range [1.000000000000, 1.000000000003]. The gradient is completely undetectable — steepest descent immediately stalls.
+**Formulation A (Dirichlet hazards):** As predicted in Section 2.4, this fails. After convergence, \phi over all free cells sits in the range [1.000000000000, 1.000000000003]. The gradient is completely undetectable — steepest descent immediately stalls.
 
 **Formulation B (Neumann hazards):** The solver converged in 8,826 SOR iterations, taking about 4.2 seconds. The resulting path successfully reaches the goal with:
 - Path length: **153.5 cells**
@@ -367,7 +367,6 @@ uv run python plan_on_heightmap.py mola_tharsis.tif \
     --mpp 463 \
     --crop 800 400 1400 900 \
     --max-slope 15 \
-    
     --rover-radius 200 \
     --max-size 300 \
     --palette mars \
