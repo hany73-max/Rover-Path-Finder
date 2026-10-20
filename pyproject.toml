@@ -1,0 +1,18 @@
+[project]
+name = "rover-path-finder"
+version = "0.1.0"
+description = "Safe lunar/Mars rover path planning using Laplace's equation — NumPy only."
+readme = "README.md"
+requires-python = ">=3.13"
+dependencies = [
+    "numpy",
+    "matplotlib",
+]
+
+[project.scripts]
+rover-demo          = "main:main"
+rover-plan          = "plan_on_heightmap:main"
+
+[build-system]
+requires      = ["hatchling"]
+build-backend = "hatchling.build"
