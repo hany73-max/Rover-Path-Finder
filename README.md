@@ -12,16 +12,16 @@ Most path planners for robots use A* search or **Artificial Potential Fields (AP
 
 This project uses **Laplace's equation** instead:
 
-```
-∂²\phi/∂x² + ∂²\phi/∂y² = 0
-```
+$$
+\frac{\partial^2\phi}{\partial x^2} + \frac{\partial^2\phi}{\partial y^2} = 0
+$$
 
 We solve this PDE over the obstacle-free region of the terrain, with:
-- **Start:** \phi = 1 (Dirichlet source)
-- **Goal:** \phi = 0 (Dirichlet sink)
-- **Obstacles:** ∂\phi/∂n = 0 (Neumann no-flux wall)
+- **Start:** $\phi = 1$ (Dirichlet source)
+- **Goal:** $\phi = 0$ (Dirichlet sink)
+- **Obstacles:** $\frac{\partial\phi}{\partial n} = 0$ (Neumann no-flux wall)
 
-The rover then follows steepest descent of \phi. Because \phi is **harmonic** (satisfies Laplace's equation), the **Maximum Principle** guarantees it has no interior local minima — the rover *cannot get stuck*, ever.
+The rover then follows steepest descent of $\phi$. Because $\phi$ is **harmonic** (satisfies Laplace's equation), the **Maximum Principle** guarantees it has no interior local minima — the rover *cannot get stuck*, ever.
 
 ---
 
@@ -144,8 +144,8 @@ Options:
 
 | Check | Result |
 |-------|--------|
-| Solver accuracy | O(h²) — verified against analytical solution |
-| SOR vs Jacobi   | ~66× fewer iterations at N = 160 |
+| Solver accuracy | $O(h^2)$ — verified against analytical solution |
+| SOR vs Jacobi   | ~66× fewer iterations at $N = 160$ |
 | Path vs Dijkstra shortest | +17% (cost of the safety guarantee) |
 | Min clearance to real hazard | 2.24 cells |
 | Never-stuck test | **400 / 400** random starts reached the goal |
