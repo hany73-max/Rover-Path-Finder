@@ -23,6 +23,23 @@ We solve this PDE over the obstacle-free region of the terrain, with:
 
 The rover then follows steepest descent of $\phi$. Because $\phi$ is **harmonic** (satisfies Laplace's equation), the **Maximum Principle** guarantees it has no interior local minima — the rover *cannot get stuck*, ever.
 
+### For Non-Technical Readers: The Water Flow Analogy 🌊
+
+If you don't care about the partial differential equations, think of this method as **water flowing across a landscape**:
+
+1. **Imagine the start point is a water hose** continuously pumping water into the map.
+2. **The goal is an open drain** pulling water out.
+3. **Obstacles (cliffs, steep crater walls) are waterproof dams** that water cannot cross.
+4. **The rover is a small floating rubber duck.** Once the water fills the maze and begins flowing smoothly from the hose to the drain, you drop the duck at the start. The duck simply floats along the water current until it arrives safely at the goal.
+
+#### Why does it guarantee the rover never gets stuck?
+In traditional video-game or robotics navigation (APF), a rover is like a marble rolling down a bumpy hill — it easily gets trapped in small potholes, dead ends, or U-shaped crater pockets. With Laplace's equation, **there are no potholes**. Water always flows toward the lowest point (the drain). By mathematical law (the Maximum Principle), water currents cannot form stagnant pools inside the terrain.
+
+#### Why is the path NOT the shortest path? (Why does it take wide turns or dive into craters?)
+* **Water spreads out:** Water doesn't travel like a laser beam or the shortest geometric line. It spreads across the whole plain to reduce pressure. As a result, the paths take wide, gentle curves instead of hugging obstacle corners.
+* **The equation only sees 2D slope limits, not elevation:** The math only asks: *"Is this slope under 20 degrees?"* If a giant crater has a gentle ramp into it, water flows right through the bottom of the crater and out the other side rather than walking the long way around the rim!
+* **Safety over speed:** You trade off distance optimality (paths are typically 15% to 68% longer than the absolute shortest route) in exchange for a **100% guarantee that the rover will never get stuck in a trap**.
+
 ---
 
 ## Project Structure
@@ -123,6 +140,45 @@ route found: 107 cells | 14.42 km | max slope 24.9° | climb 651 m | 2.7 s
 ```
 
 > **Tip:** Run `.\ run_all.ps1` to reproduce all runs automatically, including downloading the DEMs.
+
+### Interactive Testing: How to Pick Start & Goal Coordinates on a Map 🗺️
+
+Want to pick custom start and goal coordinates and see how the rover navigates? Here is the easiest way:
+
+#### Step 1: Generate the reference map with coordinate tick marks
+Run the planner with `--ticks` to print pixel coordinates directly on the axes:
+
+```powershell
+uv run python plan_on_heightmap.py data/opportunity.IMG --ticks --palette mars --out outputs/my_map
+```
+
+Open `outputs/my_map/map_contours.png`. You will see grid marks with numbers:
+* **X axis (horizontal):** reads from `0` on the left to `1260` on the right.
+* **Y axis (vertical):** reads from `0` at the top to `1680` at the bottom.
+* **The center ring:** The dense rings of contour lines in the middle are the steep walls of the crater. The wide open space around it is the flat Martian plain.
+
+#### Step 2: Run your test with your chosen coordinates
+Pass your chosen `(X, Y)` for `--start` and `--goal`:
+
+```powershell
+uv run python plan_on_heightmap.py data/opportunity.IMG `
+    --start 250 1500 `
+    --goal 1100 200 `
+    --ticks `
+    --palette mars `
+    --out outputs/my_test
+```
+
+#### Step 3: Check your results
+Inside `outputs/my_test/`, you will find:
+* `map_route.png`: Shows the rover's path (yellow line) from start (green dot) to goal (red star).
+* `route_profile.png`: Graphs showing the elevation changes and slopes along the route.
+* `route.csv`: Exact coordinates, distances, and elevations along the planned path.
+
+#### Example scenarios to test:
+1. **The Crater Crossing:** Start at `250 1500` (bottom-left) and Goal at `1100 200` (top-right). Watch whether it chooses to drive across the crater floor or skirt the rim.
+2. **The Crater Escape (Trap Test):** Start *inside* the crater bottom at `600 850` and Goal outside at `1100 200`. Watch the solver find a drivable breach in the crater wall to climb out.
+3. **Plains Highway:** Start at `1100 1500` and Goal at `1100 200` to see it cruise along the flat plains.
 
 ### All CLI options
 
