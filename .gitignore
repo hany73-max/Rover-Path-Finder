@@ -11,6 +11,3 @@ wheels/
 
 # Generated outputs (figures, route CSVs, solver logs)
 outputs/
-
-# Downloaded DEM data files (large binary, not tracked)
-data/
