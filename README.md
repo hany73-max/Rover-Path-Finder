@@ -193,6 +193,8 @@ Options:
   --goal  X Y           Goal pixel in the original image
   --pick                Click start and goal interactively (needs a display)
   --ticks               Label contour map axes in original pixels (to pick start/goal)
+  --contours-only       Only generate the contour map without running path planning
+  --name FILENAME       Custom name for the output image/files (e.g. --name my_map.png)
   --mpp   FLOAT         Metres per pixel (auto-read from .img labels; default: 50)
   --height-range LO HI  Map pixel values to this elevation range in metres
   --crop  X0 Y0 X1 Y1   Use only this sub-region of the original map

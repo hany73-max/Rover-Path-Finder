@@ -1,4 +1,4 @@
-﻿"""
+"""
 Plan a safe rover path between two points on a real height map
 (e.g. a Mars / Moon DEM), using Laplace's equation, and draw the
 result as a topographic contour map.
@@ -48,6 +48,8 @@ def main() -> None:
                     help="click start and goal interactively (needs a desktop window)")
     ap.add_argument("--ticks", action="store_true",
                     help="label the contour map axes in original pixels (to read off --start/--goal)")
+    ap.add_argument("--contours-only", action="store_true",
+                    help="only generate the contour map (map_contours.png) and exit without path planning")
     ap.add_argument("--mpp", type=float, default=None,
                     help="metres per pixel of the ORIGINAL map (read from .img labels automatically)")
     ap.add_argument("--height-range", nargs=2, type=float, metavar=("LO", "HI"),
@@ -69,10 +71,37 @@ def main() -> None:
     ap.add_argument("--palette", default="blue",
                     help="blue | green | mars | paper | any matplotlib colour")
     ap.add_argument("--out", default="outputs",
-                    help="output directory (default: outputs/)")
+                    help="output directory or image file path (default: outputs/)")
+    ap.add_argument("--name", type=str, default=None,
+                    help="custom filename for the output (e.g. --name my_contour.png)")
     a = ap.parse_args()
 
-    os.makedirs(a.out, exist_ok=True)
+    # Determine output directory and filenames
+    custom_name = a.name
+    out_dir = a.out
+    if out_dir.lower().endswith((".png", ".jpg", ".jpeg")):
+        parent = os.path.dirname(out_dir)
+        out_dir = parent if parent else "."
+        if not custom_name:
+            custom_name = os.path.basename(a.out)
+
+    os.makedirs(out_dir, exist_ok=True)
+
+    if custom_name:
+        base = custom_name[:-4] if custom_name.lower().endswith(".png") else custom_name
+        if a.contours_only:
+            contours_file = os.path.join(out_dir, f"{base}.png")
+        else:
+            contours_file = os.path.join(out_dir, f"{base}_contours.png")
+        route_file = os.path.join(out_dir, f"{base}_route.png")
+        profile_file = os.path.join(out_dir, f"{base}_profile.png")
+        csv_file = os.path.join(out_dir, f"{base}_route.csv")
+    else:
+        contours_file = os.path.join(out_dir, "map_contours.png")
+        route_file = os.path.join(out_dir, "map_route.png")
+        profile_file = os.path.join(out_dir, "route_profile.png")
+        csv_file = os.path.join(out_dir, "route.csv")
+
     bg = PALETTES.get(a.palette, a.palette)
 
     # ---- load terrain ----
@@ -151,7 +180,11 @@ def main() -> None:
 
     # ---- contour art map ----
     viz.fig_art(art_plot, fp, shape, a.levels, bg,
-                f"{a.out}/map_contours.png", ticks=ticks_arg)
+                contours_file, ticks=ticks_arg)
+
+    if a.contours_only:
+        print(f"saved contour map to {contours_file} (path planning skipped)")
+        return
 
     # ---- plan ----
     info = planners.plan(h, cell, start, goal, a.max_slope, a.rover_radius)
@@ -173,8 +206,8 @@ def main() -> None:
             f"climb {info['climb_m']:.0f} m, descent {info['descent_m']:.0f} m | "
             f"solver {info['iters']} iters, {info['solve_s']:.1f}s"
         )
-        viz.fig_profile(info, a.max_slope, f"{a.out}/route_profile.png")
-        with open(f"{a.out}/route.csv", "w") as fh:
+        viz.fig_profile(info, a.max_slope, profile_file)
+        with open(csv_file, "w") as fh:
             fh.write("x_original_px,y_original_px,elevation_m,distance_m\n")
             for (cx, cy), z, d in zip(info["path"], info["profile_z"], info["dist_m"]):
                 fh.write(
@@ -186,8 +219,8 @@ def main() -> None:
         print("no route")
 
     viz.fig_route(art_plot, fp, shape, info, a.levels, bg, cell,
-                  f"{a.out}/map_route.png", ticks=ticks_arg)
-    print("saved to", a.out)
+                  route_file, ticks=ticks_arg)
+    print("saved to", out_dir)
 
 
 if __name__ == "__main__":
